@@ -1,0 +1,64 @@
+# Workflow ini membangun sebuah artifact simulasi,
+# lalu membuat Artifact Attestation untuknya —
+# tujuannya membuktikan file hasil build BENAR
+# datang dari workflow resmi ini, bukan dari
+# proses lain yang mengaku-ngaku
+name: Build and Attest Artifact
+
+# Trigger manual (workflow_dispatch) supaya bisa
+# dijalankan ulang kapan saja tanpa perlu push baru,
+# DAN trigger otomatis saat push ke main supaya
+# langsung jalan begitu file ini di-commit
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-attest:
+    runs-on: ubuntu-latest
+
+    # Tiga permission ini WAJIB untuk attestation:
+    # id-token = izin minta sertifikat Sigstore
+    #            (bukti identitas workflow ini asli)
+    # attestations = izin menyimpan hasil attestation
+    #                ke GitHub setelah ditandatangani
+    # contents = izin baca kode repo untuk checkout
+    permissions:
+      id-token: write
+      attestations: write
+      contents: read
+
+    steps:
+      # Ambil salinan kode repo ke dalam runner,
+      # supaya langkah berikutnya bisa mengakses
+      # struktur folder repo ini
+      - name: Checkout kode
+        uses: actions/checkout@v4
+
+      # Simulasi proses build sungguhan — dalam
+      # proyek nyata di sini biasanya ada perintah
+      # compile/bundle, kita cukup buat file teks
+      # sebagai representasi "hasil build"
+      - name: Simulasi proses build
+        run: |
+          mkdir -p dist
+          echo "Program hasil build - $(date -u)" > dist/program.txt
+          sha256sum dist/program.txt
+
+      # Ini INTI dari materi: membuat pernyataan
+      # tertanda tangan digital (attestation) yang
+      # mengikat digest file ini ke identitas
+      # workflow yang membangunnya
+      - name: Buat attestation untuk artifact
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: 'dist/program.txt'
+
+      # Upload hasil build supaya nanti bisa
+      # diunduh manual untuk diverifikasi
+      - name: Upload artifact supaya bisa diunduh
+        uses: actions/upload-artifact@v4
+        with:
+          name: program-artifact
+          path: dist/program.txt
